@@ -1,0 +1,201 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification for Anemia Detection
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: predict
+    description: Anemia detection predictions
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /predict:
+    post:
+      operationId: predictAnemia
+      tags: [predict]
+      summary: Upload blood smear image and detect anemia
+      description: Accepts a peripheral blood smear image, runs YOLOv8 inference, and returns RBC classification results
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Blood smear image file
+              required:
+                - image
+      responses:
+        "200":
+          description: Prediction result with annotated image and cell counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /predict/history:
+    get:
+      operationId: getPredictionHistory
+      tags: [predict]
+      summary: Get recent prediction history
+      description: Returns the last 20 predictions with summary stats
+      responses:
+        "200":
+          description: List of recent predictions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PredictionSummary"
+  /predict/stats:
+    get:
+      operationId: getPredictionStats
+      tags: [predict]
+      summary: Get aggregate prediction statistics
+      description: Returns aggregate counts across all predictions
+      responses:
+        "200":
+          description: Aggregate statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionStats"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    RbcClassCount:
+      type: object
+      properties:
+        className:
+          type: string
+          description: RBC class name (e.g. Normal, Macrocyte, etc.)
+        count:
+          type: integer
+          description: Number of cells detected in this class
+        percentage:
+          type: number
+          description: Percentage of total cells
+      required:
+        - className
+        - count
+        - percentage
+    PredictionResult:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Prediction ID for history retrieval
+        annotatedImageBase64:
+          type: string
+          description: Base64-encoded annotated image with bounding boxes
+        totalCells:
+          type: integer
+          description: Total number of RBCs detected
+        classCounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/RbcClassCount"
+        hasAnemia:
+          type: boolean
+          description: Whether anemia indicators were detected
+        confidence:
+          type: number
+          description: Overall model confidence score (0-1)
+        processedAt:
+          type: string
+          description: ISO timestamp of when the prediction was made
+      required:
+        - id
+        - annotatedImageBase64
+        - totalCells
+        - classCounts
+        - hasAnemia
+        - confidence
+        - processedAt
+    PredictionSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        totalCells:
+          type: integer
+        hasAnemia:
+          type: boolean
+        confidence:
+          type: number
+        processedAt:
+          type: string
+        normalPercentage:
+          type: number
+          description: Percentage of normal RBCs
+      required:
+        - id
+        - totalCells
+        - hasAnemia
+        - confidence
+        - processedAt
+        - normalPercentage
+    PredictionStats:
+      type: object
+      properties:
+        totalPredictions:
+          type: integer
+        totalCellsAnalyzed:
+          type: integer
+        averageConfidence:
+          type: number
+        anemiaPositiveCount:
+          type: integer
+        mostCommonAbnormality:
+          type: ["string", "null"]
+      required:
+        - totalPredictions
+        - totalCellsAnalyzed
+        - averageConfidence
+        - anemiaPositiveCount
+        - mostCommonAbnormality
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
